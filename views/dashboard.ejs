@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard - Vulnerability Vigilance</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Sidebar -->
+      <div class="col-md-2 p-0">
+        <%- include('partials/sidebar') %>
+      </div>
+      <!-- Main Content -->
+      <div class="col-md-10">
+        <h1 class="my-4">Dashboard</h1>
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <canvas id="vulnChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <canvas id="productChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <canvas id="statusChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        <h2 class="my-4">Latest Vulnerabilities</h2>
+        <div class="table-responsive">
+          <table class="table table-bordered">
+            <thead class="table-dark">
+              <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Product</th>
+                <th>Affected Version</th>
+                <th>Severity</th>
+                <th>CVSS Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% latestVulns.forEach(vuln => { %>
+                <tr>
+                  <td><%= vuln.name %></td>
+                  <td><%= vuln.description %></td>
+                  <td><%= vuln.product %></td>
+                  <td><%= vuln.affectedVersion %></td>
+                  <td><%= vuln.severity %></td>
+                  <td><%= vuln.cvssScore %></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Chart JS Scripts -->
+  <script>
+    const vulnCtx = document.getElementById('vulnChart').getContext('2d');
+    new Chart(vulnCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Total Vulnerabilities'],
+        datasets: [{
+          label: 'Count',
+          data: [<%= totalVulnerabilities %>],
+          backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          borderColor: 'rgba(255, 99, 132, 1)',
+          borderWidth: 1
+        }]
+      }
+    });
+
+    const productCtx = document.getElementById('productChart').getContext('2d');
+    new Chart(productCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Total Products'],
+        datasets: [{
+          label: 'Count',
+          data: [<%= totalProducts %>],
+          backgroundColor: 'rgba(54, 162, 235, 0.2)',
+          borderColor: 'rgba(54, 162, 235, 1)',
+          borderWidth: 1
+        }]
+      }
+    });
+
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    const statusLabels = [<% statusCounts.forEach(function(s, index) { %>
+      "<%= s._id %>"<% if(index !== statusCounts.length - 1){ %>, <% } %>
+    <% }); %>];
+    const statusData = [<% statusCounts.forEach(function(s, index) { %>
+      <%= s.count %><% if(index !== statusCounts.length - 1){ %>, <% } %>
+    <% }); %>];
+    new Chart(statusCtx, {
+      type: 'pie',
+      data: {
+        labels: statusLabels,
+        datasets: [{
+          label: 'Vulnerability Status',
+          data: statusData,
+          backgroundColor: [
+            'rgba(255, 206, 86, 0.2)',
+            'rgba(75, 192, 192, 0.2)',
+            'rgba(153, 102, 255, 0.2)',
+            'rgba(201, 203, 207, 0.2)'
+          ],
+          borderColor: [
+            'rgba(255, 206, 86, 1)',
+            'rgba(75, 192, 192, 1)',
+            'rgba(153, 102, 255, 1)',
+            'rgba(201, 203, 207, 1)'
+          ],
+          borderWidth: 1
+        }]
+      }
+    });
+  </script>
+  <!-- Bootstrap Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

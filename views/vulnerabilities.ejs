@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vulnerabilities - ReconDefenderIQ</title>
+  <!-- Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <!-- DataTables CSS -->
+  <link
+    rel="stylesheet"
+    type="text/css"
+    href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css"
+  />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    /* Remove default margins so content lines up with sidebar at the top */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    /* Remove default top margin from the h1 */
+    h1 {
+      margin-top: 0 !important;
+    }
+    /* Force table cells to wrap and not overflow */
+    #vulnTable td, #vulnTable th {
+      white-space: normal;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="container-fluid px-0">
+    <div class="row g-0 align-items-start" style="min-height: 100vh;">
+      <!-- Sidebar -->
+      <div class="col-auto" style="padding: 0;">
+        <%- include('partials/sidebar') %>
+      </div>
+      
+      <!-- Main Content -->
+      <div class="col">
+        <div class="p-3">
+          <h1 class="mb-3">Vulnerabilities</h1>
+          
+          <!-- Custom Search Bar -->
+          <form method="GET" action="/vulnerabilities" class="d-flex mb-3" role="search">
+            <input
+              class="form-control me-2"
+              type="search"
+              name="search"
+              placeholder="Search vulnerabilities..."
+              value="<%= searchTerm %>"
+            />
+            <button class="btn btn-primary" type="submit">Search</button>
+          </form>
+
+          <div class="table-responsive">
+            <!-- Force fixed layout so columns don't stretch the table too wide -->
+            <table
+              id="vulnTable"
+              class="table table-bordered"
+              style="table-layout: fixed; width: 100%;"
+            >
+              <thead class="table-dark">
+                <tr>
+                  <th style="width: 110px;">Name</th>
+                  <th style="width: 350px;">Description</th>
+                  <th style="width: 200px;">Product</th>
+                  <th style="width: 80px;">Affected Version</th>
+                  <th style="width: 100px;">Severity</th>
+                  <th style="width: 70px;">CVSS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% vulnerabilities.forEach(vuln => { %>
+                  <tr>
+                    <td><%= vuln.name %></td>
+                    <td><%= vuln.description %></td>
+                    <td><%= vuln.product %></td>
+                    <td><%= vuln.affectedVersion %></td>
+                    <td><%= vuln.severity %></td>
+                    <td><%= vuln.cvssScore %></td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- Bootstrap Bundle JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- DataTables JS -->
+  <script
+    type="text/javascript"
+    src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"
+  ></script>
+  <script
+    type="text/javascript"
+    src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"
+  ></script>
+  
+  <script>
+    $(document).ready(function() {
+      $('#vulnTable').DataTable({
+        dom:
+          '<"row" <"col d-flex justify-content-end"l> >' +
+          '<"row" <"col-sm-12"tr> >' +
+          '<"row" <"col-sm-5"i> <"col-sm-7"p> >',
+        lengthMenu: [[50, 100, 200], [50, 100, 200]],
+        pageLength: 50,
+        responsive: true
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Product Management - ReconDefenderIQ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Sidebar -->
+      <div class="col-md-2 p-0">
+        <%- include('partials/sidebar') %>
+      </div>
+      <!-- Main Content -->
+      <div class="col-md-10">
+        <h1 class="my-4">Product Management</h1>
+        <div class="card mb-4">
+          <div class="card-body">
+            <form action="/products/add" method="POST" class="row g-3">
+              <div class="col-md-4">
+                <input type="text" name="name" class="form-control" placeholder="Product Name" required>
+              </div>
+              <div class="col-md-4">
+                <input type="text" name="version" class="form-control" placeholder="Version" required>
+              </div>
+              <div class="col-md-4">
+                <input type="text" name="category" class="form-control" placeholder="Category" required>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary">Add Product</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <h2 class="my-4">Products List</h2>
+        <div class="table-responsive">
+          <table class="table table-bordered">
+            <thead class="table-dark">
+              <tr>
+                <th>Name</th>
+                <th>Version</th>
+                <th>Category</th>
+                <th>Added On</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% products.forEach(product => { %>
+                <tr>
+                  <td><%= product.name %></td>
+                  <td><%= product.version %></td>
+                  <td><%= product.category %></td>
+                  <td><%= product.createdAt.toLocaleString() %></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Bootstrap Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
