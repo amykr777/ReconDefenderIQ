@@ -5,6 +5,8 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const path = require('path');
 const axios = require('axios'); // For NVD API calls
+const Parser = require('rss-parser'); // For parsing RSS feeds
+const parser = new Parser();
 
 // Import models
 const User = require('./models/User');
@@ -39,7 +41,7 @@ let updateProgress = 0;
 let lastUpdateLog = null;
 
 // Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/vulnVigilance', {
+mongoose.connect('mongodb://localhost:27017/ReconDefenderIQ', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
@@ -169,15 +171,32 @@ app.post('/products/add', isAuthenticated, async (req, res) => {
 });
 
 // --- API Management Routes ---
+// GET: Render API management page with all keys and the dedicated NVD key.
 app.get('/api-management', isAuthenticated, async (req, res) => {
   const apiKeys = await ApiKey.find({});
-  res.render('api-management', { apiKeys });
+  const nvdApiKey = await ApiKey.findOne({ apiName: 'NVD' });
+  res.render('api-management', { apiKeys, nvdApiKey });
 });
 
+// POST: Add a new API key (for non-NVD keys)
 app.post('/api-management/add', isAuthenticated, async (req, res) => {
   const { apiName, apiKey } = req.body;
   const newApiKey = new ApiKey({ apiName, apiKey });
   await newApiKey.save();
+  res.redirect('/api-management');
+});
+
+// POST: Dedicated route to update NVD API key.
+app.post('/api-management/update-nvd', isAuthenticated, async (req, res) => {
+  const { apiKey } = req.body;
+  let nvdKey = await ApiKey.findOne({ apiName: 'NVD' });
+  if (nvdKey) {
+    nvdKey.apiKey = apiKey;
+    await nvdKey.save();
+  } else {
+    nvdKey = new ApiKey({ apiName: 'NVD', apiKey });
+    await nvdKey.save();
+  }
   res.redirect('/api-management');
 });
 
@@ -201,12 +220,10 @@ app.post('/settings/delete-user/:id', isAuthenticated, async (req, res) => {
 });
 
 // --- Update DB Routes ---
-// Render the update-db page (which shows the calendar, progress bar, and last update log)
 app.get('/update-db', isAuthenticated, (req, res) => {
   res.render('update-db', { lastUpdateLog });
 });
 
-// Start update process using selected date range
 app.post('/update-db/start', isAuthenticated, async (req, res) => {
   const { startDate, endDate } = req.body;
   if (!startDate || !endDate) {
@@ -221,20 +238,62 @@ app.post('/update-db/start', isAuthenticated, async (req, res) => {
   res.json({ status: "started", startDate, endDate });
 });
 
-// Return current update progress
 app.get('/update-db/progress', isAuthenticated, (req, res) => {
   res.json({ progress: updateProgress });
 });
 
+// --- Threat News Route ---
+// Fetch news from multiple RSS feeds, combine and sort them, then apply a search filter.
+app.get('/threat-news', isAuthenticated, async (req, res) => {
+  try {
+    const searchTerm = req.query.search || '';
+    // List of RSS feed URLs:
+    const feedUrls = [
+      'https://www.darkreading.com/rss.xml',
+      'https://feeds.feedburner.com/TheHackersNews',
+      'https://www.wired.com/feed/category/security/latest/rss',
+      'https://blog.rapid7.com/tag/emergent-threat-response/rss/',
+      'https://blog.rapid7.com/tag/research/rss/',
+      'https://blog.rapid7.com/tag/detection-and-response/rss/',
+      'https://blog.rapid7.com/tag/vulnerability-management/rss/',
+      'https://blog.rapid7.com/tag/cloud-security/rss/',
+      'https://blog.rapid7.com/rss/'
+    ];
+    // Fetch all feeds in parallel
+    const feeds = await Promise.all(feedUrls.map(url => parser.parseURL(url)));
+    let combinedItems = [];
+    feeds.forEach(feed => {
+      if (feed.items) {
+        combinedItems = combinedItems.concat(feed.items);
+      }
+    });
+    // Sort by publication date descending
+    combinedItems.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+    // Filter by search term if provided
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      combinedItems = combinedItems.filter(item =>
+        (item.title && item.title.toLowerCase().includes(lowerSearch)) ||
+        (item.contentSnippet && item.contentSnippet.toLowerCase().includes(lowerSearch)) ||
+        (item.content && item.content.toLowerCase().includes(lowerSearch))
+      );
+    }
+    res.render('threat-news', { feed: { items: combinedItems }, error: null, searchTerm });
+  } catch (err) {
+    console.error("Error fetching RSS feeds:", err);
+    res.render('threat-news', { feed: null, error: 'Unable to load news at this time.', searchTerm: '' });
+  }
+});
+
 // --- Update Database Function ---
 // Clears previous vulnerabilities and downloads new ones using the chosen date range.
-// It filters out items with vulnStatus "Awaiting Analysis", and it parses product and version.
+// Filters out items with vulnStatus "Awaiting Analysis" and parses product/version.
 async function updateDatabase(startDate, endDate) {
   try {
     // Clear previous vulnerabilities
     await Vulnerability.deleteMany({});
 
-    // Retrieve the NVD API key (if set)
+    // Retrieve the NVD API key (if any)
     const nvdKeyDoc = await ApiKey.findOne({ apiName: "NVD" });
     const nvdApiKey = nvdKeyDoc ? nvdKeyDoc.apiKey : null;
 
@@ -248,7 +307,7 @@ async function updateDatabase(startDate, endDate) {
     }
 
     let allItems = [];
-    // Fetch vulnerabilities from each chunk
+    // Fetch vulnerabilities in chunks
     for (const [chunkStart, chunkEnd] of dateRanges) {
       const params = {
         pubStartDate: chunkStart.toISOString(),
@@ -264,7 +323,7 @@ async function updateDatabase(startDate, endDate) {
     // Filter out vulnerabilities with vulnStatus "Awaiting Analysis"
     allItems = allItems.filter(item => item?.cve?.vulnStatus !== "Awaiting Analysis");
 
-    // Sort the remaining items by published date descending
+    // Sort by published date descending
     allItems.sort((a, b) => new Date(b.cve.published) - new Date(a.cve.published));
 
     const total = allItems.length;
@@ -272,14 +331,14 @@ async function updateDatabase(startDate, endDate) {
       const item = allItems[i];
       const cveId = item?.cve?.id || "UNKNOWN";
 
-      // Description (prefer English)
+      // Parse description (prefer English)
       let description = "No description provided";
       const descObj = item?.cve?.descriptions?.find(d => d.lang === "en");
       if (descObj && descObj.value) {
         description = descObj.value;
       }
 
-      // Severity & CVSS Score
+      // Parse severity and CVSS Score
       let severity = "unknown";
       let cvssScore = 0;
       const metrics = item?.cve?.metrics || {};
@@ -291,8 +350,8 @@ async function updateDatabase(startDate, endDate) {
         cvssScore = metrics.cvssMetricV2[0].cvssData?.baseScore || cvssScore;
       }
 
-      // Product & Affected Version:
-      // Primary: parse from configurations criteria
+      // Parse product and affected version:
+      // Primary: from configurations criteria
       let product = "Unknown";
       let affectedVersion = "N/A";
       const configs = item?.cve?.configurations || [];
@@ -301,7 +360,7 @@ async function updateDatabase(startDate, endDate) {
         if (nodes.length > 0) {
           const cpeMatches = nodes[0].cpeMatch || [];
           if (cpeMatches.length > 0) {
-            const cpe = cpeMatches[0].criteria; // e.g. "cpe:2.3:a:cmseasy:cmseasy:7.7.7.9:*:*:*:*:*:*:*"
+            const cpe = cpeMatches[0].criteria; // e.g., "cpe:2.3:a:cmseasy:cmseasy:7.7.7.9:*:*:*:*:*:*:*"
             const parts = cpe.split(':');
             if (parts.length >= 6) {
               product = parts[4] || product;
@@ -310,7 +369,7 @@ async function updateDatabase(startDate, endDate) {
           }
         }
       }
-      // Fallback: parse from description if product is still Unknown
+      // Fallback: parse from description if product remains "Unknown"
       if (product === "Unknown") {
         // Example pattern: "found in Zenvia Movidesk up to 25.01.22"
         const match = description.match(/found in\s+([\w\s]+)\s+up to\s+([\w\.]+)/i);
@@ -336,9 +395,8 @@ async function updateDatabase(startDate, endDate) {
 
       updateProgress = Math.round(((i + 1) / total) * 100);
     }
-
     updateProgress = 100;
-    // Update lastUpdateLog with timestamp and timeframe used
+    // Update lastUpdateLog with timestamp and date range used
     lastUpdateLog = {
       timestamp: new Date().toISOString(),
       startDate,
