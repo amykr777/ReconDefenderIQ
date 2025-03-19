@@ -9,11 +9,17 @@ body {
     display: flex;
 }
 
+/* Sidebar Styling */
 .sidebar {
-    width: 200px;
+    width: 220px;
     background-color: #333;
     min-height: 100vh;
     color: #fff;
+    padding-top: 20px;
+}
+
+.sidebar h2 {
+    text-align: center;
 }
 
 .sidebar ul {
@@ -24,25 +30,66 @@ body {
 
 .sidebar ul li {
     padding: 15px;
+    border-bottom: 1px solid #444;
+}
+
+.sidebar ul li:hover {
+    background-color: #444;
 }
 
 .sidebar ul li a {
     color: #fff;
     text-decoration: none;
+    display: block;
 }
 
+/* Main Content Styling */
 .content {
     flex-grow: 1;
     padding: 20px;
 }
 
-.chart-container {
-    width: 30%;
-    display: inline-block;
-    vertical-align: top;
-    margin-right: 20px;
+/* Dashboard Layout */
+.dashboard-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 20px;
 }
 
+/* Card Styling */
+.card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Small Cards for Numbers */
+.small-card {
+    flex: 1;
+    min-width: 200px;
+    max-width: 20%;
+}
+
+/* Large Cards for Charts */
+.large-card {
+    flex: 2;
+    min-width: 400px;
+    height: 300px; /* Ensures uniform size */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Charts Styling */
+canvas {
+    width: 100% !important;
+    height: auto !important;
+}
+
+/* Table Styling */
 table {
     width: 100%;
     border-collapse: collapse;
@@ -58,6 +105,7 @@ th, td {
     text-align: left;
 }
 
+/* Login Page Styling */
 .login-container {
     width: 300px;
     margin: 100px auto;

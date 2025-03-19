@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>All Vulnerabilities - ReconDefenderIQ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    /* Ensure table cells wrap text nicely */
+    td, th {
+      white-space: normal;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="container-fluid">
+    <div class="row g-0">
+      <!-- Sidebar -->
+      <div class="col-auto">
+        <%- include('partials/sidebar') %>
+      </div>
+      <!-- Main Content -->
+      <div class="col p-3">
+        <h1 class="mb-3">All Vulnerabilities</h1>
+        <!-- Table to list vulnerabilities -->
+        <div class="table-responsive">
+          <table class="table table-bordered">
+            <thead class="table-dark">
+              <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Vulnerable Product</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if(vulnerabilities && vulnerabilities.length) { %>
+                <% vulnerabilities.forEach(vuln => { %>
+                  <tr>
+                    <td><%= vuln.name %></td>
+                    <td><%= vuln.description %></td>
+                    <td><%= vuln.product %></td>
+                    <td>
+                      <form action="/vulnerabilities/update-status/<%= vuln._id %>" method="POST">
+                        <select name="status" class="form-select" onchange="this.form.submit()">
+                          <option value="open" <%= vuln.status === 'open' ? 'selected' : '' %>>Open</option>
+                          <option value="closed" <%= vuln.status === 'closed' ? 'selected' : '' %>>Closed</option>
+                          <option value="ignored" <%= vuln.status === 'ignored' ? 'selected' : '' %>>Ignored</option>
+                        </select>
+                      </form>
+                    </td>
+                  </tr>
+                <% }); %>
+              <% } else { %>
+                <tr>
+                  <td colspan="4" class="text-center">No vulnerabilities found.</td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Bootstrap Bundle with Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -119,26 +119,44 @@ app.get('/logout', (req, res) => {
 });
 
 // --- Dashboard Route ---
-app.get('/dashboard', isAuthenticated, async (req, res) => {
-  const totalVulnerabilities = await Vulnerability.countDocuments({});
-  const totalProducts = await Product.countDocuments({});
-  const statusCounts = await Vulnerability.aggregate([
-    { $group: { _id: "$status", count: { $sum: 1 } } }
-  ]);
-  const latestVulns = await Vulnerability.find({}).sort({ createdAt: -1 }).limit(20);
-  res.render('dashboard', {
-    totalVulnerabilities,
-    totalProducts,
-    statusCounts,
-    latestVulns
-  });
+app.get('/dashboard', async (req, res) => {
+  try {
+      // Fetch total counts
+      const totalVulnerabilities = await Vulnerability.countDocuments();
+      const totalProducts = await Product.countDocuments();
+
+      // Fetch latest vulnerabilities
+      const latestVulns = await Vulnerability.find().sort({ createdAt: -1 }).limit(5);
+
+      // Fetch vulnerability status counts
+      const statusCounts = await Vulnerability.aggregate([
+          { $group: { _id: "$status", count: { $sum: 1 } } }
+      ]);
+
+      // Fetch product category counts
+      const categoryCounts = await Product.aggregate([
+          { $group: { _id: "$category", count: { $sum: 1 } } }
+      ]);
+
+      res.render('dashboard', {
+          totalVulnerabilities,
+          totalProducts,
+          latestVulns,
+          statusCounts,
+          categoryCounts
+      });
+
+  } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      res.status(500).send('Internal Server Error');
+  }
 });
 
-// --- Vulnerabilities Route with Search ---
-app.get('/vulnerabilities', isAuthenticated, async (req, res) => {
+// --- All Vulnerabilities Route ---
+app.get('/all-vulnerabilities', isAuthenticated, async (req, res) => {
   const searchTerm = req.query.search || '';
-  // Base filter: only show vulnerabilities with non-zero CVSS Score
   let baseQuery = { cvssScore: { $ne: 0 } };
+
   if (searchTerm) {
     baseQuery = {
       $and: [
@@ -153,8 +171,62 @@ app.get('/vulnerabilities', isAuthenticated, async (req, res) => {
       ]
     };
   }
+
   const vulnerabilities = await Vulnerability.find(baseQuery);
-  res.render('vulnerabilities', { vulnerabilities, searchTerm });
+  res.render('all-vulnerabilities', { vulnerabilities, searchTerm });
+});
+
+// --- Your Vulnerabilities Route ---
+app.get('/your-vulnerabilities', isAuthenticated, async (req, res) => {
+  const searchTerm = req.query.search || '';
+
+  // Fetch product names from the Product Management
+  const products = await Product.find({});
+  const productNames = products.map(p => p.name.toLowerCase());
+
+  // Build a regex combining all product names
+  const regexString = productNames.join('|'); // e.g. "farmacia|windows|ubuntu"
+
+  // Base query: vulnerabilities whose product is in productNames or description contains them
+  let baseQuery = {
+    $or: [
+      { product: { $in: productNames } },
+      { description: { $regex: regexString, $options: 'i' } }
+    ]
+  };
+
+  if (searchTerm) {
+    const searchRegex = { $regex: searchTerm, $options: 'i' };
+    baseQuery = {
+      $and: [
+        baseQuery,
+        {
+          $or: [
+            { name: searchRegex },
+            { description: searchRegex },
+            { product: searchRegex }
+          ]
+        }
+      ]
+    };
+  }
+
+  const vulnerabilities = await Vulnerability.find(baseQuery);
+  res.render('your-vulnerabilities', { vulnerabilities, searchTerm });
+});
+
+// --- POST route for updating vulnerability status ---
+app.post('/vulnerabilities/update-status/:id', isAuthenticated, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    await Vulnerability.findByIdAndUpdate(id, { status });
+    // Use recommended redirect method instead of 'back'
+    res.redirect(req.get("Referrer") || "/");
+  } catch (error) {
+    console.error('Error updating vulnerability status:', error);
+    res.redirect(req.get("Referrer") || "/");
+  }
 });
 
 // --- Product Management Routes ---
@@ -178,7 +250,6 @@ app.get('/api-management', isAuthenticated, async (req, res) => {
   res.render('api-management', { apiKeys, nvdApiKey });
 });
 
-// POST: Add a new API key (for non-NVD keys)
 app.post('/api-management/add', isAuthenticated, async (req, res) => {
   const { apiName, apiKey } = req.body;
   const newApiKey = new ApiKey({ apiName, apiKey });
@@ -186,7 +257,6 @@ app.post('/api-management/add', isAuthenticated, async (req, res) => {
   res.redirect('/api-management');
 });
 
-// POST: Dedicated route to update NVD API key.
 app.post('/api-management/update-nvd', isAuthenticated, async (req, res) => {
   const { apiKey } = req.body;
   let nvdKey = await ApiKey.findOne({ apiName: 'NVD' });
@@ -243,7 +313,6 @@ app.get('/update-db/progress', isAuthenticated, (req, res) => {
 });
 
 // --- Threat News Route ---
-// Fetch news from multiple RSS feeds, combine and sort them, then apply a search filter.
 app.get('/threat-news', isAuthenticated, async (req, res) => {
   try {
     const searchTerm = req.query.search || '';
@@ -286,8 +355,6 @@ app.get('/threat-news', isAuthenticated, async (req, res) => {
 });
 
 // --- Update Database Function ---
-// Clears previous vulnerabilities and downloads new ones using the chosen date range.
-// Filters out items with vulnStatus "Awaiting Analysis" and parses product/version.
 async function updateDatabase(startDate, endDate) {
   try {
     // Clear previous vulnerabilities
@@ -351,7 +418,7 @@ async function updateDatabase(startDate, endDate) {
       }
 
       // Parse product and affected version:
-      // Primary: from configurations criteria
+      // Primary: from configurations criteria if available
       let product = "Unknown";
       let affectedVersion = "N/A";
       const configs = item?.cve?.configurations || [];
@@ -369,9 +436,8 @@ async function updateDatabase(startDate, endDate) {
           }
         }
       }
-      // Fallback: parse from description if product remains "Unknown"
+      // Fallback: parse from description if product is still "Unknown"
       if (product === "Unknown") {
-        // Example pattern: "found in Zenvia Movidesk up to 25.01.22"
         const match = description.match(/found in\s+([\w\s]+)\s+up to\s+([\w\.]+)/i);
         if (match) {
           product = match[1].trim();
