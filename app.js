@@ -119,36 +119,57 @@ app.get('/logout', (req, res) => {
 });
 
 // --- Dashboard Route ---
-app.get('/dashboard', async (req, res) => {
+app.get('/dashboard', isAuthenticated, async (req, res) => {
   try {
-      // Fetch total counts
-      const totalVulnerabilities = await Vulnerability.countDocuments();
-      const totalProducts = await Product.countDocuments();
+    // 1) Fetch product names
+    const products = await Product.find({});
+    const productNames = products.map(p => p.name.toLowerCase());
 
-      // Fetch latest vulnerabilities
-      const latestVulns = await Vulnerability.find().sort({ createdAt: -1 }).limit(5);
+    // 2) Build a baseQuery for vulnerabilities that match those product names
+    //    either in the "product" field or in the "description" field:
+    const regexString = productNames.join('|'); // e.g. "windows|ubuntu|farmacia"
+    const baseQuery = {
+      $or: [
+        { product: { $in: productNames } },
+        { description: { $regex: regexString, $options: 'i' } }
+      ]
+    };
 
-      // Fetch vulnerability status counts
-      const statusCounts = await Vulnerability.aggregate([
-          { $group: { _id: "$status", count: { $sum: 1 } } }
-      ]);
+    // 3) Count how many such vulnerabilities we have
+    const totalVulnerabilities = await Vulnerability.countDocuments(baseQuery);
 
-      // Fetch product category counts
-      const categoryCounts = await Product.aggregate([
-          { $group: { _id: "$category", count: { $sum: 1 } } }
-      ]);
+    // 4) For the Product Management chart, you likely want to show *all* products
+    //    in your system, so keep that aggregator as-is:
+    const totalProducts = await Product.countDocuments();
 
-      res.render('dashboard', {
-          totalVulnerabilities,
-          totalProducts,
-          latestVulns,
-          statusCounts,
-          categoryCounts
-      });
+    // 5) For the “Latest Vulnerabilities” table, only fetch from your baseQuery
+    const latestVulns = await Vulnerability
+      .find(baseQuery)
+      .sort({ createdAt: -1 })
+      .limit(5);
 
+    // 6) Build the vulnerability status aggregator using the same baseQuery
+    const statusCounts = await Vulnerability.aggregate([
+      { $match: baseQuery },
+      { $group: { _id: "$status", count: { $sum: 1 } } }
+    ]);
+
+    // 7) The product categories aggregator can remain the same:
+    const categoryCounts = await Product.aggregate([
+      { $group: { _id: "$category", count: { $sum: 1 } } }
+    ]);
+
+    // 8) Render your dashboard with all the data
+    res.render('dashboard', {
+      totalVulnerabilities,
+      totalProducts,
+      latestVulns,
+      statusCounts,
+      categoryCounts
+    });
   } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      res.status(500).send('Internal Server Error');
+    console.error('Error fetching dashboard data:', error);
+    res.status(500).send('Internal Server Error');
   }
 });
 
